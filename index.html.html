@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>CaddieAI Pro</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}body{background:#f5f0e8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a2e1a}#root{max-width:430px;margin:0 auto;min-height:100vh;background:#f5f0e8}.h{padding:14px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #c8bfad;position:sticky;top:0;background:#f5f0e8;z-index:10}.card{background:#fff;border:1px solid #c8bfad;border-radius:16px;padding:16px;margin-bottom:14px}.input{background:#ede8dc;border:1px solid #c8bfad;border-radius:10px;color:#1a2e1a;font-size:15px;font-weight:500;padding:11px 13px;width:100%;outline:none;-webkit-appearance:none}.btn{background:#2d4a2d;color:#f5f0e8;border:none;border-radius:12px;padding:14px 20px;font-family:-apple-system,sans-serif;font-size:15px;font-weight:700;cursor:pointer;width:100%}.btn:disabled{opacity:0.4;cursor:not-allowed}.lbl{font-size:11px;color:#6b876b;margin-bottom:5px;font-family:monospace;text-transform:uppercase;letter-spacing:0.8px;display:block}.chip{border:1.5px solid #c8bfad;border-radius:20px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-block;background:#ede8dc;color:#3d5c3d;margin:2px;transition:all 0.2s}.chip.sel{background:#2d4a2d;color:#fff;border-color:#2d4a2d}.ai{background:#2d4a2d;border-radius:16px;padding:20px;margin-top:14px;color:#fff}.ai-club{font-size:32px;font-weight:700;margin-bottom:4px}.ai-shot{font-size:14px;color:#c49a2a;font-weight:700;margin-bottom:14px;text-transform:uppercase}.ai-cue{margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.15);font-size:14px;font-style:italic;line-height:1.6}.tabs{display:flex;border-bottom:1px solid #c8bfad}.tab{flex:1;background:none;border:none;padding:12px;font-size:13px;font-weight:700;color:#6b876b;cursor:pointer;border-bottom:2px solid transparent;text-transform:uppercase;letter-spacing:0.5px}.tab.act{color:#2d4a2d;border-bottom-color:#2d4a2d}.load{display:flex;align-items:center;gap:10px;color:#6b876b;font-size:13px;padding:16px 0}.spin{width:16px;height:16px;border:2px solid #c8bfad;border-top-color:#2d4a2d;border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0}@keyframes spin{to{transform:rotate(360deg)}}.page{padding:18px 20px;padding-bottom:100px}.sign{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:20px}.stat{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #c8bfad;font-size:14px}.stat-val{font-family:monospace;font-weight:700;color:#2d7a2d}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script type="text/babel">
+const { useState, useEffect } = React;
+
+const CLUBS = [{n:"Driver",y:260},{n:"3W",y:235},{n:"5W",y:210},{n:"2I",y:195},{n:"3I",y:185},{n:"4I",y:175},{n:"5I",y:165},{n:"6I",y:155},{n:"7I",y:145},{n:"8I",y:135},{n:"9I",y:125},{n:"PW",y:115},{n:"GW",y:100},{n:"SW",y:85}];
+const BALLS = ["TP5","TP5x","AVX","Chrome Soft","Pro V1","Generic-High","Generic-Mid","Generic-Budget"];
+const LIES = ["Fairway","Rough","Uphill","Downhill","Above Feet","Below Feet","Divot","Tight"];
+const WINDS = [["↑","N - Headwind (into you)"],["↗","NE"],["→","E"],["↘","SE"],["↓","S - Downwind (away)"],["↙","SW"],["←","W"],["↖","NW"],["⛳","Calm"]];
+
+const SHOT_SYSTEM = `You are an expert golf caddie with deep technical knowledge. Recommend ONE specific shot for the situation.
+
+SHOT TYPES & SETUPS:
+FADE: Open stance, ball forward, weaken grip, swing out-to-in, hold off release → soft landing, minimal roll
+DRAW: Closed stance, ball slightly back, strengthen grip, swing in-to-out, forearms roll → distance & run
+HIGH: Ball forward, hands neutral, high finish, sweep up → soft landing, quick stop
+PUNCH/LOW: Ball back, weight forward, hands forward, 50-75% swing, lead wrist flat, low follow → penetrating, low flight
+STANDARD: Full controlled swing, nothing fancy → reliable distance
+
+LIE ADJUSTMENTS:
+UPHILL: Adds loft - take 1 more club. Match body to slope, swing WITH hill.
+DOWNHILL: Removes loft - take more lofted club. Weight forward, swing DOWN slope, never lift.
+BALL ABOVE FEET: Pulls left - aim right, grip down, stand tall. Draw coming naturally.
+BALL BELOW FEET: Fades right - aim left, bend knees, balance is priority. Compact swing.
+
+WIND STRATEGY:
+Headwind (into you): Add 8% distance per 10mph. Club up.
+Downwind (away): Subtract 5% per 10mph. Club down.
+L→R crosswind: Holds fades, kills draws.
+R→L crosswind: Holds draws, kills fades.
+
+BALL SELECTION AFFECTS:
+- TP5/TP5x/Pro V1: Lower spin, more distance, firm feel → aggressive shots
+- Chrome Soft/AVX: Mid spin, control → balanced play
+- Generic: Varies by type (High=forgiving, Mid=balanced, Budget=distance)
+
+COURSE CONDITIONS:
+Wet/soft: Ball doesn't run. Extra club on approaches. Play for control.
+Firm/fast: Ball runs 10-20% more. Land short, let it release.
+Cold: Less carry (5-8%). Warm: More carry (5%).
+
+CONFIDENCE AFFECTS STRATEGY:
+Rusty: Conservative club choices, straight shots. Avoid shape.
+Average: Standard recommendations.
+Feeling Good: Can attack more aggressively.
+In the Zone: Attack pins, use shaped shots confidently.
+
+ALWAYS CONSIDER:
+- Carry distance vs total distance (hazards matter)
+- Recent miss patterns from player history
+- Club gaps in the bag
+- Signature shots with each club
+- Slope rating of course
+
+Respond EXACTLY in this format:
+CLUB: [name]
+SHOT: [type + direction if applicable]
+WHY: [1-2 sentences on why this club/shot for this situation]
+SETUP: [3-4 key setup points]
+CUE: [1 confident pre-shot thought]`;
+
+async function askCaddie(messages, apiKey) {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {"Content-Type": "application/json","x-api-key": apiKey,"anthropic-version": "2023-06-01"},
+    body: JSON.stringify({model: "claude-sonnet-4-20250514",max_tokens: 1000,system: SHOT_SYSTEM,messages})
+  });
+  if (!res.ok) throw new Error(res.statusText);
+  const d = await res.json();
+  return d.content?.[0]?.text || "";
+}
+
+function useLS(k, init) {
+  const [s, setS] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(k)) || init; } catch { return init; }
+  });
+  useEffect(() => { localStorage.setItem(k, JSON.stringify(s)); }, [s, k]);
+  return [s, setS];
+}
+
+const toM = y => Math.round(y * 0.9144);
+const toY = m => Math.round(m / 0.9144);
+const fmt = (y, u) => (u === "m" ? toM(y) : y) + (u === "m" ? "m" : "y");
+
+function Chip({ label, sel, onClick }) {
+  return <span onClick={onClick} className={`chip ${sel ? "sel" : ""}`}>{label}</span>;
+}
+
+function PreShot({ bag, round, apiKey, unit, shotLog }) {
+  const [pin, setPin] = useState("");
+  const [front, setFront] = useState("");
+  const [back, setBack] = useState("");
+  const [lie, setLie] = useState("");
+  const [wind, setWind] = useState("");
+  const [windSpd, setWindSpd] = useState("");
+  const [elev, setElev] = useState("");
+  const [conf, setConf] = useState("Average");
+  const [loading, setLoading] = useState(false);
+  const [rec, setRec] = useState(null);
+  const [log, setLog] = useState(false);
+  const [result, setResult] = useState("");
+  const [miss, setMiss] = useState("");
+
+  const recentMisses = shotLog.slice(-10).filter(s=>s.miss).map(s=>s.miss).reduce((a,m)=>{a[m]=(a[m]||0)+1;return a},{});
+  const topMiss = Object.entries(recentMisses).sort((a,b)=>b[1]-a[1])[0];
+
+  const getRec = async () => {
+    if (!pin || !apiKey) return alert("Need pin distance and API key");
+    setLoading(true);
+    try {
+      const pinY = unit === "m" ? toY(parseFloat(pin)) : parseFloat(pin);
+      const bagStr = bag.map(c=>`${c.n}: ${c.y}y`).join(", ");
+      const histStr = topMiss ? `Recent miss pattern: ${topMiss[0]} (${topMiss[1]}x)` : "";
+      const prompt = `PIN: ${Math.round(pinY)}y${front?` FRONT: ${Math.round(unit==="m"?toY(parseFloat(front)):parseFloat(front))}y`:""}${back?` BACK: ${Math.round(unit==="m"?toY(parseFloat(back)):parseFloat(back))}y`:""}
+LIE: ${lie||"Fairway"} | ELEV: ${elev||"Flat"}
+WIND: ${wind} ${windSpd||"0"}mph | COURSE: ${round.firmness||"Normal"} | BALL: ${round.ball||"Standard"}
+CONFIDENCE: ${conf} | TEMP: ${round.temp||"60"}° | BAG: ${bagStr}
+${histStr}
+${round.notes?`NOTES: ${round.notes}`:""}\n\nRecommend ONE club and shot.`;
+      const text = await askCaddie([{ role: "user", content: prompt }], apiKey);
+      const get = k => { const l = text.split("\n"); const i = l.findIndex(x=>x.startsWith(k)); if(i===-1)return ""; let v=l[i].replace(k,"").trim(); for(let j=i+1;j<l.length;j++){if(/^(CLUB|SHOT|WHY|SETUP|CUE):/.test(l[j]))break;v+=" "+l[j].trim();} return v.trim(); };
+      setRec({club:get("CLUB:"),shot:get("SHOT:"),why:get("WHY:"),setup:get("SETUP:"),cue:get("CUE:"),pin:Math.round(pinY),lie});
+    } catch(e) { alert("Error: "+e.message); }
+    setLoading(false);
+  };
+
+  const logShot = () => {
+    if (!rec) return;
+    setLog(false);
+    setResult("");
+    setMiss("");
+    setPin("");
+    setFront("");
+    setBack("");
+    setLie("");
+    setRec(null);
+  };
+
+  return (
+    <div className="page">
+      <h2 style={{fontSize:18,marginBottom:14,color:"#2d4a2d"}}>⛳ Pre-Shot Planner</h2>
+      <div className="card">
+        <label className="lbl">Pin Distance ({unit})*</label>
+        <input type="number" placeholder={unit==="m"?"148":"162"} value={pin} onChange={e=>setPin(e.target.value)} className="input" style={{marginBottom:12}}/>
+        
+        <label className="lbl">Front Distance ({unit})</label>
+        <input type="number" placeholder="optional" value={front} onChange={e=>setFront(e.target.value)} className="input" style={{marginBottom:12}}/>
+        
+        <label className="lbl">Back Distance ({unit})</label>
+        <input type="number" placeholder="optional" value={back} onChange={e=>setBack(e.target.value)} className="input" style={{marginBottom:12}}/>
+        
+        <label className="lbl">Lie</label>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}}>
+          {LIES.map(l=><Chip key={l} label={l} sel={lie===l} onClick={()=>setLie(lie===l?"":l)}/>)}
+        </div>
+
+        <label className="lbl">Wind Direction</label>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6,marginBottom:12}}>
+          {WINDS.map(([a,l])=><div key={l} onClick={()=>setWind(wind===l?"":l)} style={{background:wind===l?"#2d4a2d":"#ede8dc",border:`1.5px solid ${wind===l?"#2d4a2d":"#c8bfad"}`,borderRadius:10,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:18,minHeight:44,color:wind===l?"#fff":"#1a2e1a",padding:"4px"}}>
+            <div>{a}</div>
+            <div style={{fontSize:8,marginTop:2,textAlign:"center",lineHeight:1}}>{l.split(" - ")[0]}</div>
+          </div>)}
+        </div>
+
+        <label className="lbl">Wind Speed (mph)</label>
+        <input type="number" placeholder="0" value={windSpd} onChange={e=>setWindSpd(e.target.value)} className="input" style={{marginBottom:12}}/>
+
+        <label className="lbl">Elevation</label>
+        <div style={{display:"flex",gap:6,marginBottom:12}}>
+          {["Flat","Uphill","Downhill"].map(e=><Chip key={e} label={e} sel={elev===e} onClick={()=>setElev(elev===e?"":e)}/>)}
+        </div>
+
+        <label className="lbl">Your Confidence</label>
+        <div style={{display:"flex",gap:6,marginBottom:12}}>
+          {["Rusty","Average","Feeling Good","In the Zone"].map(c=><Chip key={c} label={c} sel={conf===c} onClick={()=>setConf(c)}/>)}
+        </div>
+
+        <button className="btn" onClick={getRec} disabled={loading||!pin}>{loading?"Reading...":"Ask Caddie"}</button>
+      </div>
+
+      {loading && <div className="load"><div className="spin"/><span>Analyzing shot...</span></div>}
+      
+      {rec && (
+        <>
+          <div className="ai">
+            <div className="ai-club">{rec.club}</div>
+            <div className="ai-shot">{rec.shot}</div>
+            <div style={{fontSize:13,color:"rgba(245,240,232,0.85)",lineHeight:1.7,marginBottom:14}}>{rec.why}</div>
+            <div style={{fontSize:12,color:"rgba(245,240,232,0.75)",lineHeight:1.6,marginBottom:14}}><strong>Setup:</strong> {rec.setup}</div>
+            <div className="ai-cue"><strong>Mental:</strong> {rec.cue}</div>
+            {!log ? (
+              <button className="btn" style={{marginTop:14,background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)"}}>
+                <span onClick={()=>setLog(true)}>Log Result</span>
+              </button>
+            ) : (
+              <div style={{marginTop:14}}>
+                <label className="lbl">How did it go?</label>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
+                  {[{e:"✅",l:"Solid",v:"good"},{e:"😐",l:"Ok",v:"ok"},{e:"❌",l:"Miss",v:"bad"}].map(o=>(
+                    <div key={o.v} onClick={()=>setResult(o.v)} style={{background:result===o.v?"rgba(255,255,255,0.2)":"rgba(255,255,255,0.07)",border:`1.5px solid ${result===o.v?"rgba(255,255,255,0.5)":"rgba(255,255,255,0.15)"}`,borderRadius:12,padding:"10px",textAlign:"center",cursor:"pointer",color:"#fff",fontSize:12,fontWeight:600}}>
+                      <div style={{fontSize:20}}>{o.e}</div>{o.l}
+                    </div>
+                  ))}
+                </div>
+                {result==="bad" && (
+                  <>
+                    <label className="lbl">Miss Direction</label>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>
+                      {["Long","Short","Left","Right","Thin","Fat"].map(m=><Chip key={m} label={m} sel={miss===m} onClick={()=>setMiss(miss===m?"":m)}/>)}
+                    </div>
+                  </>
+                )}
+                {result && <button className="btn" style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)"}} onClick={logShot}>Save Shot</button>}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function Review({ shots, setShotLog, unit }) {
+  const good = shots.filter(s=>s.result==="good").length;
+  const bad = shots.filter(s=>s.result==="bad").length;
+  const misses = shots.filter(s=>s.miss).map(s=>s.miss).reduce((a,m)=>{a[m]=(a[m]||0)+1;return a},{});
+  const topMiss = Object.entries(misses).sort((a,b)=>b[1]-a[1])[0];
+
+  const clubStats = {};
+  shots.forEach(s=>{
+    if(!clubStats[s.club]) clubStats[s.club]={g:0,t:0};
+    clubStats[s.club].t++;
+    if(s.result==="good") clubStats[s.club].g++;
+  });
+
+  if(shots.length===0) return (
+    <div className="page" style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:400}}>
+      <div style={{fontSize:48}}>⛳</div>
+      <div style={{color:"#6b876b",fontSize:14,marginTop:12,textAlign:"center"}}>Log shots on Pre-Shot to see your round summary.</div>
+    </div>
+  );
+
+  return (
+    <div className="page">
+      <h2 style={{fontSize:18,marginBottom:14,color:"#2d4a2d"}}>📊 Round Summary · {shots.length} shots</h2>
+      <div className="card">
+        <div className="stat"><span>Solid</span><span className="stat-val" style={{color:"#2d7a2d"}}>{good}</span></div>
+        <div className="stat"><span>Misses</span><span className="stat-val" style={{color:"#c0392b"}}>{bad}</span></div>
+        {topMiss && <div className="stat" style={{borderBottom:"none"}}><span>Most: {topMiss[0]}</span><span style={{fontFamily:"monospace",color:"#8b6914"}}>×{topMiss[1]}</span></div>}
+      </div>
+
+      {Object.keys(clubStats).length>0 && (
+        <>
+          <h3 style={{fontSize:14,marginBottom:10,color:"#2d4a2d"}}>Club Performance</h3>
+          {Object.entries(clubStats).sort((a,b)=>b[1].t-a[1].t).map(([club,s])=>(
+            <div key={club} style={{marginBottom:8}}>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}>
+                <span style={{fontWeight:600}}>{club}</span>
+                <span style={{color:"#6b876b"}}>{Math.round(s.g/s.t*100)}% · {s.t} shot{s.t>1?"s":""}</span>
+              </div>
+              <div style={{height:4,background:"#e4ddd0",borderRadius:2,overflow:"hidden"}}>
+                <div style={{height:"100%",background:"#3a5f3a",width:Math.round(s.g/s.t*100)+"%",transition:"width 0.3s"}}/>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+
+      <h3 style={{fontSize:14,marginTop:16,marginBottom:10,color:"#2d4a2d"}}>All Shots</h3>
+      {shots.map((s,i)=>(
+        <div key={i} style={{background:"#fff",border:"1px solid #c8bfad",borderRadius:10,padding:"10px 14px",marginBottom:6,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <div style={{fontWeight:700,fontSize:13}}>{s.club}</div>
+            <div style={{fontSize:10,color:"#6b876b",marginTop:2}}>{fmt(s.pin,unit)} · {s.lie}</div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            {s.miss && <span style={{fontSize:10,color:"#c0392b",fontWeight:700}}>{s.miss}</span>}
+            <div style={{width:8,height:8,borderRadius:"50%",background:s.result==="good"?"#2d7a2d":s.result==="bad"?"#c0392b":"#8b6914"}}/>
+          </div>
+        </div>
+      ))}
+
+      <button className="btn" style={{marginTop:20,background:"transparent",color:"#c0392b",border:"1px solid #e8c4c0"}} onClick={()=>setShotLog([])}>Clear Round</button>
+    </div>
+  );
+}
+
+function App() {
+  const [user, setUser] = useLS("caddieai_user", null);
+  const [name, setName] = useState("");
+  const [unit, setUnit] = useLS("caddieai_unit", "y");
+  const [apiKey, setApiKey] = useLS("caddieai_apikey", "");
+  const [bag, setBag] = useLS("caddieai_bag", CLUBS);
+  const [round, setRound] = useLS("caddieai_round", {ball:"TP5",firmness:"Normal",notes:""});
+  const [shotLog, setShotLog] = useLS("caddieai_shots", []);
+  const [tab, setTab] = useState("preshot");
+
+  if(!user) {
+    return (
+      <div style={{maxWidth:430,margin:"0 auto",minHeight:"100vh",background:"#f5f0e8"}}>
+        <div className="sign">
+          <div style={{fontSize:48,marginBottom:20}}>⛳</div>
+          <div style={{fontSize:28,fontWeight:700,color:"#2d4a2d",marginBottom:8}}>CaddieAI Pro</div>
+          <div style={{fontSize:14,color:"#6b876b",marginBottom:24,textAlign:"center"}}>Your intelligent golf caddie</div>
+          
+          <div className="card" style={{width:"100%",maxWidth:350}}>
+            <label className="lbl">Your Name</label>
+            <input placeholder="Enter name" value={name} onChange={e=>setName(e.target.value)} onKeyPress={e=>e.key==="Enter"&&user===null&&setUser({n:name.trim(),date:new Date().toISOString()})} className="input" style={{marginBottom:12}}/>
+            
+            <label className="lbl">Anthropic API Key</label>
+            <input type="password" placeholder="Your API key" value={apiKey} onChange={e=>setApiKey(e.target.value)} className="input" style={{marginBottom:4}}/>
+            <div style={{fontSize:10,color:"#6b876b",marginBottom:12}}>Get at console.anthropic.com</div>
+
+            <button className="btn" onClick={()=>setUser({n:name.trim(),date:new Date().toISOString()})} disabled={!name.trim()||!apiKey.trim()}>Start</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{maxWidth:430,margin:"0 auto",minHeight:"100vh",background:"#f5f0e8"}}>
+      <div className="h">
+        <div>
+          <div style={{fontSize:14,fontWeight:700,color:"#2d4a2d"}}>CaddieAI</div>
+          <div style={{fontSize:11,color:"#6b876b"}}>Hi, {user.n}</div>
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <div style={{display:"flex",background:"#ede8dc",border:"1px solid #c8bfad",borderRadius:16,padding:3,gap:2}}>
+            {["y","m"].map(u=><button key={u} onClick={()=>setUnit(u)} style={{background:unit===u?"#2d4a2d":"none",color:unit===u?"#f5f0e8":"#6b876b",border:"none",padding:"4px 10px",borderRadius:12,fontFamily:"monospace",fontSize:10,fontWeight:500,cursor:"pointer"}}>{u}</button>)}
+          </div>
+          <button onClick={()=>{setUser(null);setShotLog([]);}} style={{background:"none",border:"1px solid #c8bfad",borderRadius:10,padding:"6px 12px",fontSize:12,color:"#6b876b",cursor:"pointer"}}>Sign Out</button>
+        </div>
+      </div>
+
+      <div className="tabs">
+        {["preshot","review"].map(t=>(
+          <button key={t} onClick={()=>setTab(t)} className={`tab ${tab===t?"act":""}`}>{t==="preshot"?"⛳ Pre-Shot":"📊 Review"}</button>
+        ))}
+      </div>
+
+      {tab==="preshot" && <PreShot bag={bag} round={round} apiKey={apiKey} unit={unit} shotLog={shotLog}/>}
+      {tab==="review" && <Review shots={shotLog} setShotLog={setShotLog} unit={unit}/>}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+  </script>
+</body>
+</html>
